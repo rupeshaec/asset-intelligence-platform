@@ -16,10 +16,10 @@ Semantic search system for digital assets (images, videos, documents) using natu
                          ↓
 ┌─────────────────────────────────────────────────────────────┐
 │                   FASTAPI BACKEND                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Search     │  │  Ingestion   │  │   Tagging    │     │
-│  │  Endpoints   │  │  Endpoints   │  │  Endpoints   │     │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │   Search     │  │  Ingestion   │  │   Tagging    │       │
+│  │  Endpoints   │  │  Endpoints   │  │  Endpoints   │       │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘       │
 └─────────┼──────────────────┼──────────────────┼─────────────┘
           │                  │                  │
           │                  ↓                  ↓
@@ -27,8 +27,8 @@ Semantic search system for digital assets (images, videos, documents) using natu
           │         │  Adobe AEM      │  │  GPT-4 Vision   │
           │         │  Assets API     │  │  API            │
           │         └────────┬────────┘  └────────┬────────┘
-          │                  │                     │
-          │                  ↓                     │
+          │                  │                    │
+          │                  ↓                    │
           │         ┌─────────────────────────────┘
           │         │  Embedding Pipeline
           │         │  (OpenAI API)
