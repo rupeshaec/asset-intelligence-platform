@@ -1,10 +1,23 @@
-from fastapi import FastAPI
-from typing import Optional
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
 
 app = FastAPI(title="Asset Intelligence Platform")
 
+# Models
+class AssetCreate(BaseModel):
+    name: str
+    type: str
+    tags: Optional[List[str]] = []
+
+class Asset(BaseModel):
+    id: int
+    name: str
+    type: str
+    tags: List[str]
+
 # Mock database
-assets_db = [
+assets_db: List[dict] = [
     {"id": 1, "name": "hero-banner.jpg", "type": "image", "tags": ["hero", "homepage"]},
     {"id": 2, "name": "product-guide.pdf", "type": "document", "tags": ["product", "guide"]},
 ]
@@ -17,9 +30,8 @@ def root():
 def health_check():
     return {"status": "healthy", "version": "0.1.0"}
 
-@app.get("/assets")
+@app.get("/assets", response_model=dict)
 def list_assets(type: Optional[str] = None, limit: int = 10):
-    """List all assets, optionally filtered by type"""
     results = assets_db
     if type:
         results = [a for a in results if a["type"] == type]
@@ -27,8 +39,18 @@ def list_assets(type: Optional[str] = None, limit: int = 10):
 
 @app.get("/assets/{asset_id}")
 def get_asset(asset_id: int):
-    """Get a single asset by ID"""
     for asset in assets_db:
         if asset["id"] == asset_id:
             return asset
-    return {"error": "Asset not found"}
+    raise HTTPException(status_code=404, detail="Asset not found")
+
+@app.post("/assets", response_model=Asset)
+def create_asset(asset: AssetCreate):
+    new_asset = {
+        "id": len(assets_db) + 1,
+        "name": asset.name,
+        "type": asset.type,
+        "tags": asset.tags
+    }
+    assets_db.append(new_asset)
+    return new_asset
