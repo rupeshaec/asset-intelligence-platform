@@ -1,164 +1,210 @@
 # Asset Intelligence Platform
 
-Semantic search and automated classification system for digital assets using vector embeddings and large language models.
+A CMS-agnostic AI metadata governance service
+that evaluates AI-generated metadata before
+it is applied to digital assets at scale.
 
-## Overview
+## The Problem
 
-Traditional asset management relies on manual tagging and keyword-based search, which breaks down at scale. This project implements semantic search using vector embeddings, enabling natural language queries across image and document libraries.
+AI metadata generation is widely available.
+Enterprise governance of that metadata is not.
 
-**Key capabilities:**
-- Natural language search ("sunset photos with mountains" vs. keyword matching)
-- Automated visual tagging using GPT-4 Vision
-- Multi-modal search (combine text queries with image similarity)
-- Real-time asset indexing pipeline
+When a CMS or DAM generates tags for digital
+assets, enterprises in regulated industries need:
+
+- Confidence-based routing before tags are applied
+- Brand-specific validation against taxonomy
+- Human review workflows for uncertain outputs
+- Audit trails for compliance and accountability
+- Control over thresholds and exclusive brand knowledge
+
+This platform provides that governance layer —
+a service consumed by Adobe AEM, Contentful,
+Sitecore, or any DAM exposing a metadata API.
+
+## How It Works
+
+```
+CMS generates tags via its own AI
+         ↓
+POST /api/governance/evaluate
+{asset_id, asset_url, generated_tags, callback_url}
+         ↓
+Governance service queries RAG namespaces
+(brand guidelines, taxonomy, product catalogue,
+ exclusive customer knowledge)
+         ↓
+LLM evaluates tags against retrieved context
+Confidence score generated per tag
+         ↓
+Decision routing:
+> 0.85  → auto-approve → POST back to CMS
+0.70–0.85 → human review task created
+< 0.70  → reject → reason returned to CMS
+         ↓
+Audit log written (every decision)
+         ↓
+[Optional] C2PA provenance watermark applied
+```
+
+## Key Benefits
+
+**Customer-controlled governance**
+Define confidence thresholds per asset type,
+campaign, and risk level. Conservative thresholds
+for regulated markets, permissive for high-volume
+low-risk content. No code changes required —
+configuration only.
+
+**Exclusive knowledge injection**
+Index brand knowledge that exists nowhere in
+your CMS — legal guidelines, regional compliance
+rules, historical brand decisions, competitor
+blocklists. Your RAG layer becomes the single
+source of truth for governance context that no
+AI tagging vendor has access to.
+
+**Predictable infrastructure cost**
+Estimated $300–500/month at typical enterprise
+asset volumes. Runs asynchronously — no impact
+on asset upload or delivery performance.
+ROI positive within 2–3 months versus manual
+review at equivalent scale.
+
+**CMS-agnostic**
+No lock-in to any CMS, AI provider, or vector
+database. Each component is configurable and
+swappable via config.yaml.
 
 ## Architecture
 
 ### Core Components
 
-**Ingestion Layer**
-- Adobe AEM Assets API integration for metadata extraction
-- Authentication and connection pooling for API reliability
-- Batch processing for bulk asset migration
+**Governance API**
+- CMS-agnostic REST endpoint
+- Accepts tag payloads from any source system
+- Returns confidence scores and routing decisions
+- Configurable thresholds per asset type and risk level
 
-**Embedding Pipeline**
-- OpenAI Embeddings API for text and image vectorization
-- Embedding dimension: 1536 (OpenAI ada-002 model)
-- Processing rate: ~500 assets/minute
+**Tag Evaluation Layer**
+- Queries RAG namespaces for brand context
+- LLM evaluates each tag against retrieved context
+- Returns per-tag confidence scores and issue evidence
+- Configurable LLM provider: OpenAI, Anthropic, Ollama
 
-**Vector Database**
-- Evaluating: Pinecone (managed) vs. Weaviate (self-hosted)
-- Trade-off: Operational simplicity vs. infrastructure control
-- Index structure: Flat index for <1M vectors, HNSW for scale
+**RAG Context Layer**
+- Brand guidelines namespace
+- Approved taxonomy namespace
+- Product catalogue namespace
+- Exclusive customer knowledge namespace
+- Approved examples namespace (golden dataset)
+- Configurable vector DB: Pinecone, pgvector, Weaviate
 
-**Search API**
-- FastAPI for low-latency query processing
-- Query → embedding → vector search → ranked results
-- Sub-100ms p95 latency target for cached queries
+**Human Review Task Adapter**
+- Configurable notification adapter per deployment
+- AEM Inbox (reference implementation)
+- Extensible to: Jira, Slack, email, any webhook
 
-**AI Tagging Service**
-- GPT-4 Vision for automated image analysis
-- Generates: tags, descriptions, alt-text, contextual metadata
-- Fallback strategy: CLIP embeddings when GPT-4V unavailable
+**Audit Trail**
+- Every decision logged: model, context retrieved,
+  confidence score, routing decision, approver, timestamp
+- REST API for compliance queries
+- Supports regulatory review and brand audits
+
+**C2PA Provenance (optional)**
+- Watermarks AI-generated metadata
+- Enables downstream verification of provenance
+- Designed for regulated industries
 
 ### Data Flow
 
 ```
-Asset Upload → Metadata Extraction → Embedding Generation → 
-Vector DB Storage → Indexed & Searchable  → AI Tagging (async)
+CMS Webhook → Governance API
+→ RAG Query → LLM Evaluation
+→ Confidence Score → Decision Router
+→ [Auto-approve | Human Review | Reject]
+→ Audit Log → Callback to CMS
 ```
-
-### Multi-Modal Search Architecture
-
-Combining text and image queries requires weighted embedding fusion:
-- Text query embedding (weight: 0.7)
-- Image similarity embedding (weight: 0.3)
-- Cosine similarity for ranking
-
-**Current challenge:** Optimizing weight distribution based on query intent. Exploring learned weighting vs. fixed ratios.
 
 ## Technical Stack
 
-- **Backend:** Python 3.11, FastAPI
-- **Vector Database:** Pinecone (primary evaluation), Weaviate (secondary)
-- **AI/ML:** OpenAI Embeddings API, GPT-4 Vision API
-- **Content Source:** Adobe AEM Assets API
-- **Infrastructure:** Docker, AWS (planned deployment)
-- **Observability:** Structured logging (structlog), Prometheus metrics
+- **API:** Python 3.11, FastAPI
+- **Orchestration:** LangGraph
+- **LLM:** Configurable (OpenAI GPT-4 default)
+- **Vector DB:** Configurable (Pinecone default)
+- **Embeddings:** OpenAI text-embedding-ada-002
+- **Audit Store:** PostgreSQL
+- **Infrastructure:** Docker, AWS Sydney (planned)
+
+## Reference Implementation
+
+Adobe AEM is the reference CMS implementation.
+The governance service integrates via AEM workflow
+steps and writes results back via AEM Assets API.
+The notification adapter uses AEM Inbox for
+human review task creation.
+
+The architecture is portable to any CMS exposing
+metadata read/write APIs and webhook capabilities.
+
+## Configuration
+
+```yaml
+# config.yaml
+llm_provider: openai          # openai | anthropic | ollama
+vector_db: pinecone           # pinecone | pgvector | weaviate
+notification_adapter: aem     # aem | jira | slack | email
+confidence_thresholds:
+  auto_approve: 0.85
+  human_review: 0.70
+  reject: 0.70
+asset_type_overrides:
+  hero_images:
+    auto_approve: 0.92
+  stock_photos:
+    auto_approve: 0.75
+```
 
 ## Current Status
 
 **Completed:**
-- ✅ AEM Assets API integration
-- ✅ Embedding pipeline (OpenAI integration)
-- ✅ Vector database setup (Pinecone)
-- ✅ Basic semantic search API
-- ✅ GPT-4V automated tagging
+- ✅ FastAPI foundation and core endpoints
+- ✅ Governance layer architecture defined
+- ✅ CMS-agnostic API design
 
 **In Progress:**
-- 🚧 Multi-modal search implementation
-- 🚧 Real-time indexing pipeline for new assets
-- 🚧 Performance optimization (caching, batch processing)
+- 🚧 Tag evaluation endpoint (LLM + RAG)
+- 🚧 RAG namespace setup (Pinecone)
 
 **Planned:**
-- ⏳ Production deployment (AWS ECS)
-- ⏳ Monitoring and alerting (Prometheus + Grafana)
-- ⏳ Vector database cost optimization analysis
+- ⏳ Confidence-based decision routing
+- ⏳ Human review task adapter
+- ⏳ Audit trail (PostgreSQL)
+- ⏳ AEM reference implementation
+- ⏳ C2PA provenance integration
+- ⏳ Production deployment (AWS Sydney)
 
-## Technical Decisions & Trade-offs
+## Infrastructure Cost Estimate
 
-### Vector Database Selection
+| Component | Monthly Cost |
+|---|---|
+| LLM API (10K assets) | ~$100–300 |
+| Vector DB (Pinecone) | ~$70 |
+| Governance API (AWS Fargate) | ~$50–100 |
+| Audit Store (RDS PostgreSQL) | ~$25 |
+| **Total** | **~$300–500** |
 
-**Pinecone (currently using):**
-- ✅ Managed service (zero ops overhead)
-- ✅ Fast setup and iteration
-- ❌ Higher cost at scale
-- ❌ Vendor lock-in
-
-**Weaviate (evaluating):**
-- ✅ Self-hosted (infrastructure control)
-- ✅ Lower cost at scale
-- ❌ Operational complexity
-- ❌ Requires Kubernetes/container orchestration
-
-**Decision:** Pinecone for development/MVP, evaluate Weaviate migration if cost becomes prohibitive at scale.
-
-### Embedding Model Choice
-
-Using OpenAI `text-embedding-ada-002`:
-- 1536 dimensions (good balance of accuracy vs. storage)
-- $0.0001 per 1K tokens (acceptable for prototype scale)
-- Alternative considered: Cohere embeddings (similar performance, slightly cheaper)
-
-### Real-Time vs. Batch Indexing
-
-**Trade-off:** Low latency (real-time) vs. cost efficiency (batch)
-
-Current approach: Hybrid
-- Real-time indexing for user-uploaded assets (immediate searchability)
-- Batch processing for bulk migrations (cost-optimized)
-- Event-driven architecture using message queue (future: SQS/Kafka)
-
-## Observability
-
-**Metrics tracked:**
-- Embedding generation latency (p50, p95, p99)
-- Vector search query time
-- Cache hit rate (planned)
-- AI tagging accuracy (manual spot-check, ~95% satisfactory rate observed)
-
-**Logging strategy:**
-- Structured logs (JSON format) for query patterns and error analysis
-- Correlation IDs for request tracing
-- Log sampling for high-volume operations
-
-## Open Questions
-
-**Performance:**
-- What's the optimal batch size for embedding generation? (currently 50 assets/batch)
-- How to handle embedding model version upgrades without re-indexing everything?
-
-**Architecture:**
-- Event-driven indexing vs. polling for new assets?
-- Caching strategy for frequently searched queries (Redis vs. in-memory)?
-
-**Cost:**
-- At what scale does self-hosted Weaviate become cost-effective vs. Pinecone?
+Compared to manual review at equivalent scale: $40,000–100,000/year.
 
 ## Running Locally
+
 ```bash
-# Clone and setup
-git clone https://github.com/yourusername/asset-intelligence-platform
+git clone https://github.com/rupeshaec/asset-intelligence-platform
 cd asset-intelligence-platform
-
-# Environment setup
 cp .env.example .env
-# Add your API keys: OPENAI_API_KEY, PINECONE_API_KEY, AEM_ASSETS_API_KEY
-
-# Docker setup
 docker-compose up -d
-
-# Verify
 curl http://localhost:8000/health
 ```
 
+See [GOVERNANCE_LAYER.md](./GOVERNANCE_LAYER.md)
+for the full ideation and validation plan.
